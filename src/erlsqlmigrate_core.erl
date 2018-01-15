@@ -36,8 +36,9 @@
 %% @doc Creates the migration files ready to be filled in with SQL.
 %% Also calls the Database driver in case there is any setup needed there.
 create(Config, _MigDir, []) ->
-    run_driver(Config,create,[]);
-create([{Driver,_ConnArgs}]=Config,MigDir,Name) ->
+    run_driver(Config, create, []);
+
+create([{Driver,_ConnArgs}] = Config, MigDir, Name) ->
     filelib:ensure_dir(?UPDIR(MigDir,Driver)++"/"),
     filelib:ensure_dir(?DOWNDIR(MigDir,Driver)++"/"),
     Migration= get_migration(Driver,MigDir,Name),
@@ -94,11 +95,17 @@ down([{Driver,_ConnArgs}]=Config, MigDir, Name) ->
 %%
 %% @throws unknown_database
 %% @doc Runs command on the driver for the specified database
-run_driver([{pgsql,ConnArgs}],Cmd,Args) ->
-    erlsqlmigrate_driver_pg:Cmd(ConnArgs,Args);
-run_driver([{mysql,ConnArgs}],Cmd,Args) ->
-    erlsqlmigrate_driver_my:Cmd(ConnArgs,Args);
-run_driver([{_,_ConnArgs}],_Cmd,_Args) ->
+run_driver([{pgsql, ConnArgs}], Cmd, Args) ->
+    erlsqlmigrate_driver_pg:Cmd(ConnArgs, Args);
+
+run_driver([{mysql, ConnArgs}],Cmd,Args) ->
+    erlsqlmigrate_driver_my:Cmd(ConnArgs, Args);
+
+run_driver([{cqerl, ConnArgs}],Cmd,Args) ->
+    erlsqlmigrate_driver_cql:Cmd(ConnArgs, Args);
+
+run_driver([{Dbname,_ConnArgs}],_Cmd,_Args) ->
+    io:format("Dbname = ~p~n", [Dbname]),
     throw(unknown_database).
 
 %% @spec get_migration(Driver, MigDir, {Name, Timestamp, Up, Down}) -> migration()

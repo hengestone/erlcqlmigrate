@@ -1,7 +1,11 @@
-{application, erlsqlmigrate,
- [{description, "SQL Migration Tool"},
-  {vsn, "0.1"},
-  {modules, []},
-  {registered, []},
-  {applications, [kernel, stdlib, crypto, ssl]},
-  {included_applications, []}]}.
+{
+  application, erlsqlmigrate,
+  [
+    {description, "SQL Migration Tool"},
+    {vsn, "0.2"},
+    {modules, []},
+    {registered, []},
+    {applications, [kernel, stdlib, crypto, ssl]},
+    {included_applications, []}
+  ]
+}.

@@ -12,3 +12,9 @@ erlsqlmigrate
 config/
 migrations/
 doc/
+_build/*
+*.sublime-workspace
+mad
+rebar.lock
+.tool-versions
+.applist

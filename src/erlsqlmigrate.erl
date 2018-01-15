@@ -94,7 +94,10 @@ version() ->
 %% @spec load_app() -> ok
 %% @doc Pre-load the app so that we get default configuration
 load_app() ->
-    ok = application:load(erlsqlmigrate).
+    case application:load(erlsqlmigrate) of
+      ok -> ok;
+      {error, {already_loaded, erlsqlmigrate}} ->ok
+    end.
 
 %% @spec usage() -> ok
 %% @equiv usage(OptSpecList)
@@ -123,7 +126,7 @@ option_spec_list() ->
      {help,            $h, "help",          undefined,                    "Show the program options"},
      {verbose,         $v, "verbose",       {boolean, false},             "Be verbose about what gets done"},
      {version,         $V, "Version",       {boolean, false},             "output the version number"},
-     {environment,     $e, "environment",   {string,"development"},       "Environment you are running migration on. Defaults to 'development'"},
+     {environment,     $e, "environment",   {string, "development"},       "Environment you are running migration on. Defaults to 'development'"},
      {migration_dir,   $m, "migration-dir", {string, MigrationsDefault},  "The directory containing your SQL migration files [./migrations]"},
      {config_dir,      $c, "config-dir",    {string, ConfigDefault},      "Location of your config files [./config]"}
     ].
