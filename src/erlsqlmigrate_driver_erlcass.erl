@@ -3,7 +3,7 @@
 
 %% @doc The Cassandra cql driver file, uses cqerl.
 
--module(erlsqlmigrate_driver_cql).
+-module(erlsqlmigrate_driver_erlcass).
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -11,7 +11,6 @@
 
 -export([create/2, up/2, down/2]).
 
--include ("cqerl.hrl").
 -include("migration.hrl").
 
 %% ------------------------------------------------------------------
@@ -35,10 +34,10 @@ bin_to_list(Arg) when is_binary(Arg) ->
 create([_Hostname, _Port, Keyspace] = ConnArgs, _Arg) ->
   KeyspaceName = list_to_atom(lists:concat(["keyspace_", bin_to_list(Keyspace)])),
   case connect(ConnArgs) of
-    {ok, Conn} ->
+    {ok, _Conn} ->
       case whereis(KeyspaceName) of
         undefined ->
-          case cqerl:run_query(Conn, ["CREATE KEYSPACE IF NOT EXISTS ", Keyspace]) of
+          case erlcass:query(["CREATE KEYSPACE IF NOT EXISTS ", Keyspace]) of
             ok ->
               erlang:register(KeyspaceName, self());
             Res ->
@@ -46,7 +45,7 @@ create([_Hostname, _Port, Keyspace] = ConnArgs, _Arg) ->
           end;
         ok -> ok
       end,
-      disconnect(Conn);
+      disconnect(Keyspace);
     Res -> Res
   end.
 
@@ -114,24 +113,20 @@ down(ConnArgs, Migrations) ->
 %% @spec disconnect(Conn) -> ok
 %%
 %% @doc Close existing connection to the cql database
-disconnect(Conn) ->
-  cqerl:close_client(Conn).
+disconnect(_Conn) ->
+  ok.
 
 %% @spec connect(ConnArgs) -> pid()
 %%       ConnArgs = list()
 %%
 %% @doc Connect to the Cassandra database using erlcass
-connect([Hostname, Port, Keyspace]) ->
-  application:ensure_all_started(cqerl),
-  cqerl:get_client({Hostname, Port}, [{keyspace, Keyspace}]);
+connect([_Hostname, _Port, Keyspace]) ->
+  application:ensure_all_started(erlcass),
+  Keyspace;
 
-connect([Hostname, Port, Keyspace, Username, Password]) ->
-  application:ensure_all_started(cqerl),
-  cqerl:get_client({Hostname, Port},
-                    [ {keyspace, Keyspace},
-                      {auth, {cqerl_auth_plain_handler, [{Username, Password}]}}
-                    ]
-                  ).
+connect([_Hostname, _Port, Keyspace, _Username, _Password]) ->
+  application:ensure_all_started(erlcass),
+  Keyspace.
 
 %% @spec transaction(Conn, Sql, Fun) -> ok
 %%       Conn = pid()
@@ -140,9 +135,9 @@ connect([Hostname, Port, Keyspace, Username, Password]) ->
 %%
 %% @doc Execute a sql statement wrapped in a transaction
 %% also perform execute any other function before calling commit
-transaction(Conn, Sql, Fun) ->
+transaction(_Conn, Sql, Fun) ->
   % squery(Conn, "BEGIN"), % TODO Check if yugabyte supports transactions
-  squery(Conn, Sql),
+  squery(Sql),
   Fun(),
   % squery(Conn, "COMMIT"),
   ok.
@@ -152,20 +147,8 @@ transaction(Conn, Sql, Fun) ->
 %%       Sql = string()
 %%
 %% @doc Execute a sql statement calling epgsql
-squery(Conn, Sql) ->
-  case cqerl:run_query(Conn, Sql) of
-      {error, Error} -> throw(Error);
-      Result -> Result
-  end.
-
-%% @spec equery(Conn, Sql, Params) -> ok
-%%       Conn = pid()
-%%       Sql = string()
-%%       Params = list()
-%%
-%% @doc Execute a sql statement calling epgsql with parameters.
-equery(Conn, Sql, Params) ->
-  case cqerl:run_query(Conn, #cql_query{statement=Sql, values=Params}) of
+squery(Sql) ->
+  case erlcass:query(Sql) of
       {error, Error} -> throw(Error);
       Result -> Result
   end.
@@ -175,20 +158,19 @@ equery(Conn, Sql, Params) ->
 %%       Migration = erlsqlmigrate_core:migration()
 %%
 %% @doc Insert into the migrations table the given migration.
-update(Conn,Migration) ->
+update(Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  equery(Conn, "INSERT INTO migrations(title, updated) VALUES(?, Now());",
-         [{title, Title}]).
+  squery(io_lib:format("INSERT INTO ~s.migrations(title, updated) VALUES(~s, Now());",
+         [Conn, Title])).
 
 %% @spec delete(Conn, Migration) -> ok
 %%       Conn = pid()
 %%       Migration = erlsqlmigrate_core:migration()
 %%
 %% @doc Delete the migrations table entry for the given migration
-delete(Conn,Migration) ->
+delete(Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  equery(Conn, "DELETE FROM migrations where title = ?;",
-         [{title, Title}]).
+  squery(io_lib:format("DELETE FROM ~s.migrations where title = ~s", [Conn, Title])).
 
 %% @spec applied(Conn, Migration) -> ok
 %%       Conn = pid()
@@ -198,7 +180,7 @@ delete(Conn,Migration) ->
 %% querying the migrations table
 applied(Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  case equery(Conn, "SELECT * FROM migrations where title = ?;",[{title, Title}]) of
+  case squery(io_lib:format("SELECT * FROM ~s.migrations where title = ~p;",[Conn, Title])) of
     {ok, _Cols, [_Row]} -> true;
     {ok, _Cols, []} -> false
   end.

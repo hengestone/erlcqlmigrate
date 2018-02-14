@@ -57,6 +57,7 @@ main(Args) ->
 %% @doc Create a set of migration files and also run any Database specific
 %% tasks.
 create(Config, MigDir, Name) ->
+    io:format("Create1~n"),
     erlsqlmigrate_core:create(Config, MigDir, Name).
 
 %% @spec up(Config, MigDir, Name) -> ok

@@ -11,7 +11,8 @@
 
 -export([create/3,
          up/3,
-         down/3
+         down/3,
+         run_driver/3
         ]).
 
 -include("migration.hrl").
@@ -21,8 +22,8 @@
 %% ------------------------------------------------------------------
 %% Macro Definitions
 %% ------------------------------------------------------------------
--define(UPDIR(MigDir,Driver),filename:join([MigDir,Driver,"up"])).
--define(DOWNDIR(MigDir,Driver),filename:join([MigDir,Driver,"down"])).
+-define(UPDIR(MigDir, Driver), filename:join([MigDir, Driver, "up"])).
+-define(DOWNDIR(MigDir, Driver), filename:join([MigDir, Driver, "down"])).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -38,10 +39,11 @@
 create(Config, _MigDir, []) ->
     run_driver(Config, create, []);
 
-create([{Driver,_ConnArgs}] = Config, MigDir, Name) ->
-    filelib:ensure_dir(?UPDIR(MigDir,Driver)++"/"),
-    filelib:ensure_dir(?DOWNDIR(MigDir,Driver)++"/"),
-    Migration= get_migration(Driver,MigDir,Name),
+create([{Driver, _ConnArgs}] = Config, MigDir, Name) ->
+    filelib:ensure_dir(?UPDIR(MigDir, Driver)++"/"),
+    filelib:ensure_dir(?DOWNDIR(MigDir, Driver)++"/"),
+    Migration = get_migration(Driver, MigDir, Name),
+    io:format("Migration = ~p~n", [Migration]),
     file:write_file(Migration#migration.up_path, <<"">>),
     file:write_file(Migration#migration.down_path, <<"">>),
     erlsqlmigrate_core:create(Config, MigDir, []).
@@ -59,7 +61,7 @@ up([{Driver,_ConnArgs}]=Config, MigDir, Name) ->
                 Name -> "*"++Name++"*"
             end,
     %% I think its sorted but anyway
-    Files = lists:sort(filelib:wildcard(?UPDIR(MigDir,Driver)++"/"++Regex)),
+    Files = lists:sort(filelib:wildcard(?UPDIR(MigDir, Driver)++"/"++Regex)),
     Migrations = get_migrations(Driver, MigDir, Files),
     run_driver(Config, up, Migrations).
 
@@ -98,13 +100,16 @@ down([{Driver,_ConnArgs}]=Config, MigDir, Name) ->
 run_driver([{pgsql, ConnArgs}], Cmd, Args) ->
     erlsqlmigrate_driver_pg:Cmd(ConnArgs, Args);
 
-run_driver([{mysql, ConnArgs}],Cmd,Args) ->
+run_driver([{mysql, ConnArgs}], Cmd, Args) ->
     erlsqlmigrate_driver_my:Cmd(ConnArgs, Args);
 
-run_driver([{cqerl, ConnArgs}],Cmd,Args) ->
+run_driver([{cqerl, ConnArgs}], Cmd, Args) ->
     erlsqlmigrate_driver_cql:Cmd(ConnArgs, Args);
 
-run_driver([{Dbname,_ConnArgs}],_Cmd,_Args) ->
+run_driver([{erlcass, ConnArgs}], Cmd, Args) ->
+    erlsqlmigrate_driver_erlcass:Cmd(ConnArgs, Args);
+
+run_driver([{Dbname,_ConnArgs}], _Cmd, _Args) ->
     io:format("Dbname = ~p~n", [Dbname]),
     throw(unknown_database).
 
