@@ -4,5 +4,5 @@
 %% @spec () -> integer()
 %% @doc Return the current timestamp via erlang:now().
 get_timestamp() ->
-    {Megaseconds,Seconds,Microseconds} = erlang:timestamp(),
-    (Megaseconds*1000000+Seconds)*1000000+Microseconds.
+  {{Year, Month, Day}, {Hour, Minute, Second}} = calendar:universal_time(),
+  lists:flatten(io_lib:format("~4..0w~2..0w~2..0w:~2..0w~2..0w~2..0w",[Year,Month,Day,Hour,Minute,Second])).

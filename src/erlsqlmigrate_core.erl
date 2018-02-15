@@ -123,7 +123,7 @@ run_driver([{Dbname,_ConnArgs}], _Cmd, _Args) ->
 %%
 %% @doc Creates a migration records from a set of parameter
 get_migration(Driver, MigDir, {Name, Timestamp, Up, Down}) ->
-    Title = integer_to_list(Timestamp)++"-"++Name,
+    Title = Timestamp++"-"++Name,
     #migration{date=Timestamp,
                name=Name,
                title=Title,
@@ -146,13 +146,13 @@ get_migration(Driver, MigDir, Name) ->
 get_migrations(Driver, MigDir, Files) ->
     lists:map(
       fun(F) ->
-          case re:run(F,"\/([0-9]+)\-(.*)\.sql\$",[{capture,all_but_first,list}]) of
-              {match,[Timestamp,Name]} ->
+          case re:run(F,"\/([0-9_T:]+)\-(.*)\.sql\$",[{capture, all_but_first, list}]) of
+              {match, [Timestamp, Name]} ->
                   Up = readlines(F),
                   Fd = re:replace(F, "/up/", "/down/", [global, {return, list}]),
                   Down = readlines(Fd),
                   get_migration(Driver, MigDir,
-                                {Name,list_to_integer(Timestamp),Up,Down});
+                                {Name, Timestamp, Up, Down});
               nomatch -> throw(file_not_a_migration_file)
           end
       end,

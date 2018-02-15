@@ -9,7 +9,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([create/2, up/2, down/2]).
+-export([create/2, up/2, down/2, has_keyspace/1]).
 
 -include("migration.hrl").
 
@@ -24,30 +24,56 @@
 %%
 %% @doc Create the migration table in the Database if it doesn't
 %% already exist
-bin_to_list(Arg) when is_list(Arg) ->
-  Arg;
-bin_to_list(Arg) when is_atom(Arg) ->
-  Arg;
-bin_to_list(Arg) when is_binary(Arg) ->
-  binary:bin_to_list(Arg).
 
+create_ets(Keyspace) ->
+  case ets:info(erlcass) of
+    undefined ->
+      ets:new(erlcass, [set, protected, named_table]),
+      ets:insert(erlcass, {Keyspace, self()});
+    _ ->
+      true
+  end.
+
+has_keyspace(Keyspace) ->
+  case ets:info(erlcass) of
+    undefined -> false;
+    _         ->
+      case ets:lookup(erlcass, Keyspace) of
+        [{Keyspace, _}] -> true;
+        []              -> false
+      end
+  end.
+
+create([Hostname, Port, Keyspace, _User, _Password], Arg) ->
+  create([Hostname, Port, Keyspace], Arg);
 create([_Hostname, _Port, Keyspace] = ConnArgs, _Arg) ->
-  KeyspaceName = list_to_atom(lists:concat(["keyspace_", bin_to_list(Keyspace)])),
   case connect(ConnArgs) of
     {ok, _Conn} ->
-      case whereis(KeyspaceName) of
-        undefined ->
-          case erlcass:query(["CREATE KEYSPACE IF NOT EXISTS ", Keyspace]) of
-            ok ->
-              erlang:register(KeyspaceName, self());
-            Res ->
-              Res
-          end;
-        ok -> ok
-      end,
+      create(Keyspace, []),
       disconnect(Keyspace);
-    Res -> Res
+    Res ->
+      io:format("Connect returned ~p~n", [Res]),
+      Res
+  end;
+
+create(Keyspace, _Arg) ->
+  case has_keyspace(Keyspace) of
+    false ->
+      io:format("Creating Keyspace ~p~n", [Keyspace]),
+      case squery(["CREATE KEYSPACE IF NOT EXISTS ", Keyspace]) of
+        ok ->
+          create_ets(Keyspace),
+          ok;
+        Res ->
+          Res
+      end,
+      squery("CREATE TABLE IF NOT EXISTS database.migrations(title TEXT PRIMARY KEY,updated TIMESTAMP)");
+    Res ->
+      io:format("Has Keyspace ~p returned ~p~n", [Keyspace, Res]),
+      ok
   end.
+
+
 
 %% @spec up(Config, Migrations) -> ok
 %%       Config = erlsqlmigrate:config()
@@ -97,7 +123,7 @@ down(ConnArgs, Migrations) ->
   lists:foreach(
     fun(Mig) ->
       case applied(Conn, Mig) of
-        false -> io:format("Skiping ~p it has not been applied~n.",
+        false -> io:format("Skipping ~p it has not been applied~n.",
                            [Mig#migration.title]),
                  ok;
         true -> Fun = fun() -> delete(Conn,Mig) end,
@@ -122,11 +148,11 @@ disconnect(_Conn) ->
 %% @doc Connect to the Cassandra database using erlcass
 connect([_Hostname, _Port, Keyspace]) ->
   application:ensure_all_started(erlcass),
-  Keyspace;
+  {ok, Keyspace};
 
 connect([_Hostname, _Port, Keyspace, _Username, _Password]) ->
   application:ensure_all_started(erlcass),
-  Keyspace.
+  {ok, Keyspace}.
 
 %% @spec transaction(Conn, Sql, Fun) -> ok
 %%       Conn = pid()
@@ -148,6 +174,7 @@ transaction(_Conn, Sql, Fun) ->
 %%
 %% @doc Execute a sql statement calling epgsql
 squery(Sql) ->
+  io:format("~s~n", [Sql]),
   case erlcass:query(Sql) of
       {error, Error} -> throw(Error);
       Result -> Result
@@ -160,8 +187,8 @@ squery(Sql) ->
 %% @doc Insert into the migrations table the given migration.
 update(Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  squery(io_lib:format("INSERT INTO ~s.migrations(title, updated) VALUES(~s, Now());",
-         [Conn, Title])).
+  squery(io_lib:format("INSERT INTO ~s.migrations(title, updated) VALUES('~s', ~w);",
+         [Conn, Title, erlang:system_time(microsecond)])).
 
 %% @spec delete(Conn, Migration) -> ok
 %%       Conn = pid()
@@ -170,7 +197,7 @@ update(Conn, Migration) ->
 %% @doc Delete the migrations table entry for the given migration
 delete(Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  squery(io_lib:format("DELETE FROM ~s.migrations where title = ~s", [Conn, Title])).
+  squery(io_lib:format("DELETE FROM ~s.migrations where title = '~s'", [Conn, Title])).
 
 %% @spec applied(Conn, Migration) -> ok
 %%       Conn = pid()
@@ -180,7 +207,7 @@ delete(Conn, Migration) ->
 %% querying the migrations table
 applied(Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  case squery(io_lib:format("SELECT * FROM ~s.migrations where title = ~p;",[Conn, Title])) of
+  case squery(io_lib:format("SELECT * FROM ~s.migrations where title = '~s';",[Conn, Title])) of
     {ok, _Cols, [_Row]} -> true;
     {ok, _Cols, []} -> false
   end.
@@ -190,8 +217,8 @@ applied(Conn, Migration) ->
 %%
 %% @doc Simple function to check if the migrations table is set up
 %% correctly.
-is_setup(Conn, Keyspace) ->
-  case create(Conn, Keyspace) of
+is_setup(Keyspace, _Arg) ->
+  case create(Keyspace, []) of
     ok -> true;
     _  -> false
   end.
