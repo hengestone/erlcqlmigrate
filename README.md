@@ -25,9 +25,9 @@ Options:
 If you want to run the migrations from your code. There is an API available.
 
 ```
-Config = {pgsql,["host",5432,"database","username","password"]}.
-MigDir = "/some/path/to/toplevel/migration/directory"
-Name = "some-string-or-empty-to-do-all"
+Config = [{erlcass,["host",9042,"keyspace","username","password"]}].
+MigDir = "migrations"
+Name = "description_of_migration"
 
 erlsqlmigrate:create(Config, MigDir, Name)
 
