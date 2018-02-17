@@ -60,14 +60,14 @@ create(Keyspace, _Arg) ->
   case has_keyspace(Keyspace) of
     false ->
       io:format("Creating Keyspace ~p~n", [Keyspace]),
-      case squery(["CREATE KEYSPACE IF NOT EXISTS ", Keyspace]) of
+      case squery(Keyspace, ["CREATE KEYSPACE IF NOT EXISTS ", Keyspace]) of
         ok ->
           create_ets(Keyspace),
           ok;
         Res ->
           Res
       end,
-      squery("CREATE TABLE IF NOT EXISTS database.migrations(title TEXT PRIMARY KEY,updated TIMESTAMP)");
+      squery(Keyspace, "CREATE TABLE IF NOT EXISTS {{keyspace}}.migrations(title TEXT PRIMARY KEY,updated TIMESTAMP)");
     Res ->
       io:format("Has Keyspace ~p returned ~p~n", [Keyspace, Res]),
       ok
@@ -161,9 +161,9 @@ connect([_Hostname, _Port, Keyspace, _Username, _Password]) ->
 %%
 %% @doc Execute a sql statement wrapped in a transaction
 %% also perform execute any other function before calling commit
-transaction(_Conn, Sql, Fun) ->
+transaction(Conn, Sql, Fun) ->
   % squery(Conn, "BEGIN"), % TODO Check if yugabyte supports transactions
-  squery(Sql),
+  squery(Conn, Sql),
   Fun(),
   % squery(Conn, "COMMIT"),
   ok.
@@ -173,9 +173,11 @@ transaction(_Conn, Sql, Fun) ->
 %%       Sql = string()
 %%
 %% @doc Execute a sql statement calling epgsql
-squery(Sql) ->
-  io:format("~s~n", [Sql]),
-  case erlcass:query(Sql) of
+squery(Conn, Sql) ->
+  Ctx = dict:from_list([{keyspace, Conn}, {now, erlang:system_time(microsecond)}]),
+  Query = mustache:render(Sql, Ctx),
+  io:format("~s~n", [Query]),
+  case erlcass:query(Query) of
       {error, Error} -> throw(Error);
       Result -> Result
   end.
@@ -187,7 +189,7 @@ squery(Sql) ->
 %% @doc Insert into the migrations table the given migration.
 update(Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  squery(io_lib:format("INSERT INTO ~s.migrations(title, updated) VALUES('~s', ~w);",
+  squery(Conn, io_lib:format("INSERT INTO ~s.migrations(title, updated) VALUES('~s', ~w);",
          [Conn, Title, erlang:system_time(microsecond)])).
 
 %% @spec delete(Conn, Migration) -> ok
@@ -197,7 +199,7 @@ update(Conn, Migration) ->
 %% @doc Delete the migrations table entry for the given migration
 delete(Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  squery(io_lib:format("DELETE FROM ~s.migrations where title = '~s'", [Conn, Title])).
+  squery(Conn, io_lib:format("DELETE FROM ~s.migrations where title = '~s'", [Conn, Title])).
 
 %% @spec applied(Conn, Migration) -> ok
 %%       Conn = pid()
@@ -207,7 +209,7 @@ delete(Conn, Migration) ->
 %% querying the migrations table
 applied(Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  case squery(io_lib:format("SELECT * FROM ~s.migrations where title = '~s';",[Conn, Title])) of
+  case squery(Conn, io_lib:format("SELECT * FROM ~s.migrations where title = '~s';",[Conn, Title])) of
     {ok, _Cols, [_Row]} -> true;
     {ok, _Cols, []} -> false
   end.
