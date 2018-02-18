@@ -60,14 +60,14 @@ create(Keyspace, _Arg) ->
   case has_keyspace(Keyspace) of
     false ->
       io:format("Creating Keyspace ~p~n", [Keyspace]),
-      case squery(Keyspace, ["CREATE KEYSPACE IF NOT EXISTS ", Keyspace]) of
+      case squery(Keyspace, "CREATE KEYSPACE IF NOT EXISTS {{keyspace}};") of
         ok ->
           create_ets(Keyspace),
           ok;
         Res ->
           Res
       end,
-      squery(Keyspace, "CREATE TABLE IF NOT EXISTS {{keyspace}}.migrations(title TEXT PRIMARY KEY,updated TIMESTAMP)");
+      squery(Keyspace, "CREATE TABLE IF NOT EXISTS {{keyspace}}.migrations(title TEXT PRIMARY KEY,updated TIMESTAMP);");
     Res ->
       io:format("Has Keyspace ~p returned ~p~n", [Keyspace, Res]),
       ok
@@ -174,6 +174,7 @@ transaction(Conn, Sql, Fun) ->
 %%
 %% @doc Execute a sql statement calling epgsql
 squery(Conn, Sql) ->
+  io:format("~s~n", [Sql]),
   Ctx = dict:from_list([{keyspace, Conn}, {now, erlang:system_time(microsecond)}]),
   Query = mustache:render(Sql, Ctx),
   io:format("~s~n", [Query]),
@@ -199,7 +200,7 @@ update(Conn, Migration) ->
 %% @doc Delete the migrations table entry for the given migration
 delete(Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  squery(Conn, io_lib:format("DELETE FROM ~s.migrations where title = '~s'", [Conn, Title])).
+  squery(Conn, io_lib:format("DELETE FROM ~s.migrations where title = '~s';", [Conn, Title])).
 
 %% @spec applied(Conn, Migration) -> ok
 %%       Conn = pid()
