@@ -103,9 +103,6 @@ run_driver([{pgsql, ConnArgs}], Cmd, Args) ->
 run_driver([{mysql, ConnArgs}], Cmd, Args) ->
     erlsqlmigrate_driver_my:Cmd(ConnArgs, Args);
 
-run_driver([{cqerl, ConnArgs}], Cmd, Args) ->
-    erlsqlmigrate_driver_cql:Cmd(ConnArgs, Args);
-
 run_driver([{erlcass, ConnArgs}], Cmd, Args) ->
     erlsqlmigrate_driver_erlcass:Cmd(ConnArgs, Args);
 

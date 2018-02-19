@@ -169,14 +169,17 @@ transaction(Conn, Sql, Fun) ->
   ok.
 
 %% @spec squery(Conn, Sql) -> ok
-%%       Conn = pid()
+%%       Conn = string()
 %%       Sql = string()
 %%
 %% @doc Execute a sql statement calling epgsql
-squery(Conn, Sql) ->
-  io:format("~s~n", [Sql]),
-  Ctx = dict:from_list([{keyspace, Conn}, {now, erlang:system_time(microsecond)}]),
-  Query = mustache:render(Sql, Ctx),
+squery(Conn, Sql) when is_list(Sql)->
+  squery(Conn, binary:list_to_bin(Sql));
+
+squery(Conn, Sql) when is_binary(Sql) ->
+  io:format("~p~n", [Sql]),
+  Ctx = [{"keyspace", Conn}, {"now", erlang:system_time(microsecond)}],
+  Query = bbmustache:render(Sql, Ctx),
   io:format("~s~n", [Query]),
   case erlcass:query(Query) of
       {error, Error} -> throw(Error);
