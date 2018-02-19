@@ -8,6 +8,7 @@ ebin/
 erl_crash.dump
 .~/
 logs/
+log/
 erlsqlmigrate
 config/
 migrations/
@@ -18,3 +19,4 @@ mad
 rebar.lock
 .tool-versions
 .applist
+.project
