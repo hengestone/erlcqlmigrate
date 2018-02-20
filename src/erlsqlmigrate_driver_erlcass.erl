@@ -59,7 +59,6 @@ create([_Hostname, _Port, Keyspace] = ConnArgs, _Arg) ->
 create(Keyspace, _Arg) ->
   case has_keyspace(Keyspace) of
     false ->
-      io:format("Creating Keyspace ~p~n", [Keyspace]),
       case squery(Keyspace, "CREATE KEYSPACE IF NOT EXISTS {{keyspace}};") of
         ok ->
           create_ets(Keyspace),
@@ -69,7 +68,6 @@ create(Keyspace, _Arg) ->
       end,
       squery(Keyspace, "CREATE TABLE IF NOT EXISTS {{keyspace}}.migrations(title TEXT PRIMARY KEY,updated TIMESTAMP);");
     Res ->
-      io:format("Has Keyspace ~p returned ~p~n", [Keyspace, Res]),
       ok
   end.
 
@@ -177,10 +175,8 @@ squery(Conn, Sql) when is_list(Sql)->
   squery(Conn, binary:list_to_bin(Sql));
 
 squery(Conn, Sql) when is_binary(Sql) ->
-  io:format("~p~n", [Sql]),
   Ctx = [{"keyspace", Conn}, {"now", erlang:system_time(microsecond)}],
   Query = bbmustache:render(Sql, Ctx),
-  io:format("~s~n", [Query]),
   case erlcass:query(Query) of
       {error, Error} -> throw(Error);
       Result -> Result

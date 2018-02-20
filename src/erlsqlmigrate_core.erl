@@ -107,7 +107,6 @@ run_driver([{erlcass, ConnArgs}], Cmd, Args) ->
     erlsqlmigrate_driver_erlcass:Cmd(ConnArgs, Args);
 
 run_driver([{Dbname,_ConnArgs}], _Cmd, _Args) ->
-    io:format("Dbname = ~p~n", [Dbname]),
     throw(unknown_database).
 
 %% @spec get_migration(Driver, MigDir, {Name, Timestamp, Up, Down}) -> migration()
