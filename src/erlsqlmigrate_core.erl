@@ -82,7 +82,6 @@ down([{Driver,_ConnArgs}]=Config, MigDir, Name) ->
               fun(A, B) -> A >= B end,
               filelib:wildcard(?UPDIR(MigDir,Driver)++"/"++Regex)),
     Migrations = get_migrations(Driver, MigDir, Files),
-    io:format("~nMig:~p~n",Migrations),
     run_driver(Config, down, Migrations).
 
 %% ------------------------------------------------------------------
