@@ -101,14 +101,14 @@ down(ConnArgs, Migrations) ->
 %%
 %% @doc Close existing connection to the postgres database
 disconnect(Conn) ->
-    pgsql:close(Conn).
+    pgsql_connection:close(Conn).
 
 %% @spec connect(ConnArgs) -> pid()
 %%       ConnArgs = list()
 %%
 %% @doc Connect to the postgres database using epgsql
 connect([Hostname, Port, Database, Username, Password]) ->
-    case pgsql:connect(Hostname, Username, Password,
+    case pgsql_connection:open(Hostname, Username, Password,
                        [{database, Database}, {port, Port}]) of
         {ok,Conn} -> Conn;
         {error, Error} -> throw(Error)
@@ -134,7 +134,7 @@ transaction(Conn, Sql, Fun) ->
 %%
 %% @doc Execute a sql statement calling epgsql
 squery(Conn, Sql) ->
-    case pgsql:squery(Conn, Sql) of
+    case pgsql:simple_query(Conn, Sql) of
         {error, Error} -> throw(Error);
         Result -> Result
     end.
@@ -146,7 +146,7 @@ squery(Conn, Sql) ->
 %%
 %% @doc Execute a sql statement calling epgsql with parameters.
 equery(Conn, Sql, Params) ->
-    case pgsql:equery(Conn, Sql, Params) of
+    case pgsql:extended_query(Conn, Sql, Params) of
         {error, Error} -> throw(Error);
         Result -> Result
     end.
