@@ -29,7 +29,7 @@ create(ConnArgs,_Args) ->
     case is_setup(Conn) of
         true -> ok;
         false ->
-            {ok,[],[]} = squery(Conn, "CREATE TABLE migrations(title TEXT PRIMARY KEY,updated TIMESTAMP)"),
+            {{create,table},[]} = squery(Conn, "CREATE TABLE migrations(title TEXT PRIMARY KEY,updated TIMESTAMP)"),
             ok
     end,
     ok = disconnect(Conn),
@@ -83,7 +83,7 @@ down(ConnArgs, Migrations) ->
     lists:foreach(
       fun(Mig) ->
           case applied(Conn, Mig) of
-              false -> io:format("Skiping ~p it has not been applied~n.",
+              false -> io:format("Skipping ~p it has not been applied~n.",
                                  [Mig#migration.title]),
                        ok;
               true -> Fun = fun() -> delete(Conn,Mig) end,
@@ -109,14 +109,14 @@ disconnect(Conn) ->
 %% @doc Connect to the postgres database using epgsql
 connect([Option | _OptionsT] = Options) when is_tuple(Option) ->
     case pgsql_connection:open(Options) of
-        {ok,Conn} -> Conn;
-        {error, Error} -> throw(Error)
+        {pgsql_connection, Pid} -> {pgsql_connection, Pid};
+        {error, Error}          -> {error, Error}
     end;
 connect([Hostname, Port, Database, Username, Password]) ->
     case pgsql_connection:open(Hostname, Username, Password,
                        [{database, Database}, {port, Port}]) of
-        {ok,Conn} -> Conn;
-        {error, Error} -> throw(Error)
+        {pgsql_connection, Pid} -> {pgsql_connection, Pid};
+        {error, Error}          -> {error, Error}
     end.
 
 %% @spec transaction(Conn, Sql, Fun) -> ok
@@ -139,7 +139,7 @@ transaction(Conn, Sql, Fun) ->
 %%
 %% @doc Execute a sql statement calling epgsql
 squery(Conn, Sql) ->
-    case pgsql:simple_query(Conn, Sql) of
+    case pgsql_connection:simple_query(Sql, Conn) of
         {error, Error} -> throw(Error);
         Result -> Result
     end.
@@ -151,7 +151,7 @@ squery(Conn, Sql) ->
 %%
 %% @doc Execute a sql statement calling epgsql with parameters.
 equery(Conn, Sql, Params) ->
-    case pgsql:extended_query(Conn, Sql, Params) of
+    case pgsql_connection:extended_query(Sql, Params, Conn) of
         {error, Error} -> throw(Error);
         Result -> Result
     end.
@@ -185,8 +185,8 @@ delete(Conn,Migration) ->
 applied(Conn, Migration) ->
     Title = iolist_to_binary(Migration#migration.title),
     case equery(Conn, "SELECT * FROM migrations where title=$1",[Title]) of
-        {ok, _Cols, [_Row]} -> true;
-        {ok, _Cols, []} -> false
+        {{select, _Cols}, [_Row]} -> true;
+        {{select, _Cols}, []} -> false
     end.
 
 %% @spec is_setup(Conn) -> true | false
@@ -196,6 +196,6 @@ applied(Conn, Migration) ->
 %% correctly.
 is_setup(Conn) ->
     case squery(Conn, "SELECT * FROM pg_tables WHERE tablename='migrations' and schemaname = current_schema()") of
-        {ok, _Cols, [_Row]} -> true;
-        {ok, _Cols, []} -> false
+        {{select, _Cols}, [_Row]} -> true;
+        {{select, _Cols}, []} -> false
     end.

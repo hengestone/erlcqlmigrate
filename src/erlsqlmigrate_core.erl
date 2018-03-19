@@ -43,7 +43,6 @@ create([{Driver, _ConnArgs}] = Config, MigDir, Name) ->
     filelib:ensure_dir(?UPDIR(MigDir, Driver)++"/"),
     filelib:ensure_dir(?DOWNDIR(MigDir, Driver)++"/"),
     Migration = get_migration(Driver, MigDir, Name),
-    io:format("Migration = ~p~n", [Migration]),
     file:write_file(Migration#migration.up_path, <<"">>),
     file:write_file(Migration#migration.down_path, <<"">>),
     erlsqlmigrate_core:create(Config, MigDir, []).
