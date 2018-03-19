@@ -107,6 +107,11 @@ disconnect(Conn) ->
 %%       ConnArgs = list()
 %%
 %% @doc Connect to the postgres database using epgsql
+connect([Option | _OptionsT] = Options) when is_tuple(Option) ->
+    case pgsql_connection:open(Options) of
+        {ok,Conn} -> Conn;
+        {error, Error} -> throw(Error)
+    end;
 connect([Hostname, Port, Database, Username, Password]) ->
     case pgsql_connection:open(Hostname, Username, Password,
                        [{database, Database}, {port, Port}]) of
