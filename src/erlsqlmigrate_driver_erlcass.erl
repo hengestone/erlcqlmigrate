@@ -67,7 +67,7 @@ create(Keyspace, _Arg) ->
           Res
       end,
       squery(Keyspace, "CREATE TABLE IF NOT EXISTS {{keyspace}}.migrations(title TEXT PRIMARY KEY,updated TIMESTAMP);");
-    Res ->
+    _Res ->
       ok
   end.
 

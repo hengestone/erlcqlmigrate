@@ -54,7 +54,7 @@ create([{Driver, _ConnArgs}] = Config, MigDir, Name) ->
 %%       Name = string()
 %% @throws unknown_database
 %% @doc Run the up migration. Fetch migration files and pass to driver.
-up([{Driver,_ConnArgs}]=Config, MigDir, Name) ->
+up([{Driver, _ConnArgs}]=Config, MigDir, Name) ->
     Regex = case Name of
                 [] -> "*";
                 Name -> "*"++Name++"*"
@@ -71,7 +71,7 @@ up([{Driver,_ConnArgs}]=Config, MigDir, Name) ->
 %%       Name = string()
 %% @throws unknown_database
 %% @doc Run the down migration. Fetch migration files and pass to driver.
-down([{Driver,_ConnArgs}]=Config, MigDir, Name) ->
+down([{Driver, _ConnArgs}]=Config, MigDir, Name) ->
     Regex = case Name of
                 [] -> "*";
                 Name -> "*"++Name++"*"
@@ -104,7 +104,7 @@ run_driver([{mysql, ConnArgs}], Cmd, Args) ->
 run_driver([{erlcass, ConnArgs}], Cmd, Args) ->
     erlsqlmigrate_driver_erlcass:Cmd(ConnArgs, Args);
 
-run_driver([{Dbname,_ConnArgs}], _Cmd, _Args) ->
+run_driver([{_Dbname,_ConnArgs}], _Cmd, _Args) ->
     throw(unknown_database).
 
 %% @spec get_migration(Driver, MigDir, {Name, Timestamp, Up, Down}) -> migration()

@@ -24,7 +24,7 @@
 %%
 %% @doc Create the migration table in the Database if it doesn't
 %% already exist
-create(ConnArgs,_Args) ->
+create(ConnArgs, _Args) ->
     Conn = connect(ConnArgs),
     case is_setup(Conn) of
         true -> ok;
@@ -161,7 +161,7 @@ equery(Conn, Sql, Params) ->
 %%       Migration = erlsqlmigrate_core:migration()
 %%
 %% @doc Insert into the migrations table the given migration.
-update(Conn,Migration) ->
+update(Conn, Migration) ->
     Title = iolist_to_binary(Migration#migration.title),
     equery(Conn, "INSERT INTO migrations(title,updated) VALUES($1,now())",
            [Title]).
@@ -171,7 +171,7 @@ update(Conn,Migration) ->
 %%       Migration = erlsqlmigrate_core:migration()
 %%
 %% @doc Delete the migrations table entry for the given migration
-delete(Conn,Migration) ->
+delete(Conn, Migration) ->
     Title = iolist_to_binary(Migration#migration.title),
     equery(Conn, "DELETE FROM migrations where title = $1",
            [Title]).
