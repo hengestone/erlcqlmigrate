@@ -56,17 +56,17 @@ create([_Hostname, _Port, Keyspace] = ConnArgs, _Arg) ->
       Res
   end;
 
-create(Keyspace, _Arg) ->
+create({erlcass_connection, Keyspace} = Conn, _Arg) ->
   case has_keyspace(Keyspace) of
     false ->
-      case squery(Keyspace, "CREATE KEYSPACE IF NOT EXISTS {{keyspace}};") of
+      case squery(Conn, "CREATE KEYSPACE IF NOT EXISTS {{keyspace}};") of
         ok ->
           create_ets(Keyspace),
           ok;
         Res ->
           Res
       end,
-      squery(Keyspace, "CREATE TABLE IF NOT EXISTS {{keyspace}}.migrations(title TEXT PRIMARY KEY,updated TIMESTAMP);");
+      squery(Conn, "CREATE TABLE IF NOT EXISTS {{keyspace}}.migrations(title TEXT PRIMARY KEY,updated TIMESTAMP);");
     _Res ->
       ok
   end.
@@ -85,7 +85,7 @@ create(Keyspace, _Arg) ->
 %% executed. Note if the migration has already been applied
 %% it will be skipped
 up(ConnArgs, Migrations) ->
-  {ok, Conn} = connect(ConnArgs),
+  Conn = connect(ConnArgs),
   case is_setup(Conn, []) of
       true  -> ok;
       false -> throw(setup_error)
@@ -112,7 +112,7 @@ up(ConnArgs, Migrations) ->
 %% been executed. Note if the up migration has not been applied it
 %% will be skipped.
 down(ConnArgs, Migrations) ->
-  {ok, Conn} = connect(ConnArgs),
+  Conn = connect(ConnArgs),
   case is_setup(Conn, []) of
       true  -> ok;
       false -> throw(setup_error)
@@ -146,11 +146,11 @@ disconnect(_Conn) ->
 %% @doc Connect to the Cassandra database using erlcass
 connect([_Hostname, _Port, Keyspace]) ->
   application:ensure_all_started(erlcass),
-  {ok, Keyspace};
+  {erlcass_connection, Keyspace};
 
 connect([_Hostname, _Port, Keyspace, _Username, _Password]) ->
   application:ensure_all_started(erlcass),
-  {ok, Keyspace}.
+  {erlcass_connection, Keyspace}.
 
 %% @spec transaction(Conn, Sql, Fun) -> ok
 %%       Conn = pid()
@@ -174,8 +174,8 @@ transaction(Conn, Sql, Fun) ->
 squery(Conn, Sql) when is_list(Sql)->
   squery(Conn, binary:list_to_bin(Sql));
 
-squery(Conn, Sql) when is_binary(Sql) ->
-  Ctx = [{"keyspace", Conn}, {"now", erlang:system_time(microsecond)}],
+squery({erlcass_connecction, KeySpace}, Sql) when is_binary(Sql) ->
+  Ctx = [{"keyspace", KeySpace}, {"now", erlang:system_time(microsecond)}],
   Query = bbmustache:render(Sql, Ctx),
   case erlcass:query(Query) of
       {error, Error} -> throw(Error);
@@ -187,19 +187,19 @@ squery(Conn, Sql) when is_binary(Sql) ->
 %%       Migration = erlsqlmigrate_core:migration()
 %%
 %% @doc Insert into the migrations table the given migration.
-update(Conn, Migration) ->
+update({erlcass_connection, KeySpace} = Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
   squery(Conn, io_lib:format("INSERT INTO ~s.migrations(title, updated) VALUES('~s', ~w);",
-         [Conn, Title, erlang:system_time(microsecond)])).
+         [KeySpace, Title, erlang:system_time(microsecond)])).
 
 %% @spec delete(Conn, Migration) -> ok
 %%       Conn = pid()
 %%       Migration = erlsqlmigrate_core:migration()
 %%
 %% @doc Delete the migrations table entry for the given migration
-delete(Conn, Migration) ->
+delete({erlcass_connection, KeySpace} = Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  squery(Conn, io_lib:format("DELETE FROM ~s.migrations where title = '~s';", [Conn, Title])).
+  squery(Conn, io_lib:format("DELETE FROM ~s.migrations where title = '~s';", [KeySpace, Title])).
 
 %% @spec applied(Conn, Migration) -> ok
 %%       Conn = pid()
@@ -207,9 +207,9 @@ delete(Conn, Migration) ->
 %%
 %% @doc Check whether the given migration has been applied by
 %% querying the migrations table
-applied(Conn, Migration) ->
+applied({erlcass_connection, Keyspace} = Conn, Migration) ->
   Title = iolist_to_binary(Migration#migration.title),
-  case squery(Conn, io_lib:format("SELECT * FROM ~s.migrations where title = '~s';",[Conn, Title])) of
+  case squery(Conn, io_lib:format("SELECT * FROM ~s.migrations where title = '~s';",[Keyspace, Title])) of
     {ok, _Cols, [_Row]} -> true;
     {ok, _Cols, []} -> false
   end.
@@ -219,8 +219,8 @@ applied(Conn, Migration) ->
 %%
 %% @doc Simple function to check if the migrations table is set up
 %% correctly.
-is_setup(Keyspace, _Arg) ->
-  case create(Keyspace, []) of
+is_setup(Conn, _Arg) ->
+  case create(Conn, []) of
     ok -> true;
     _  -> false
   end.

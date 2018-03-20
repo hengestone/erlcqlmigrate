@@ -14,6 +14,7 @@
          up/3,
          down/3,
          run_driver/3,
+         disconnect/1
         ]).
 
 -include("migration.hrl").
@@ -54,7 +55,16 @@ connect(mysql, ConnArgs) ->
     erlsqlmigrate_driver_my:connect(ConnArgs);
 connect(erlcass, ConnArgs) ->
     erlsqlmigrate_driver_erlcass:connect(ConnArgs);
-connect(_Driver, ConnArgs) ->
+connect(_Driver, _ConnArgs) ->
+    throw(unknown_database).
+
+disconnect({pgsql_connection, _Pid} = Conn) ->
+    erlsqlmigrate_driver_pg:disconnect(Conn);
+disconnect({mysql_connection, _Pid} = Conn) ->
+    erlsqlmigrate_driver_my:disconnect(Conn);
+disconnect({erlcass_connection, _KeySpace} = Conn) ->
+    erlsqlmigrate_driver_erlcass:disconnect(Conn);
+disconnect(_Driver) ->
     throw(unknown_database).
 
 %% @spec up([{DB,ConnArgs}], MigDir, Name) -> ok
