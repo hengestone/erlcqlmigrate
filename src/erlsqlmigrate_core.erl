@@ -9,10 +9,11 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([create/3,
+-export([connect/2,
+         create/3,
          up/3,
          down/3,
-         run_driver/3
+         run_driver/3,
         ]).
 
 -include("migration.hrl").
@@ -46,6 +47,15 @@ create([{Driver, _ConnArgs}] = Config, MigDir, Name) ->
     file:write_file(Migration#migration.up_path, <<"">>),
     file:write_file(Migration#migration.down_path, <<"">>),
     erlsqlmigrate_core:create(Config, MigDir, []).
+
+connect(pgsql, ConnArgs) ->
+    erlsqlmigrate_driver_pg:connect(ConnArgs);
+connect(mysql, ConnArgs) ->
+    erlsqlmigrate_driver_my:connect(ConnArgs);
+connect(erlcass, ConnArgs) ->
+    erlsqlmigrate_driver_erlcass:connect(ConnArgs);
+connect(_Driver, ConnArgs) ->
+    throw(unknown_database).
 
 %% @spec up([{DB,ConnArgs}], MigDir, Name) -> ok
 %%       DB = atom()
