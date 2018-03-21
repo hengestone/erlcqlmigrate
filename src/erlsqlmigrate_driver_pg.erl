@@ -9,7 +9,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([create/2, up/2, down/2]).
+-export([connect/1, create/2, up/2, down/2]).
 
 -include("migration.hrl").
 
