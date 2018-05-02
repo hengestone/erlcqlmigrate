@@ -10,7 +10,7 @@
 %% ------------------------------------------------------------------
 
 -export([main/1]).
--export([create/3,up/3,down/3]).
+-export([create/3, up/3, down/3]).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -94,6 +94,7 @@ version() ->
 %% @spec load_app() -> ok
 %% @doc Pre-load the app so that we get default configuration
 load_app() ->
+    application:ensure_started(yamerl),
     case application:load(erlsqlmigrate) of
       ok -> ok;
       {error, {already_loaded, erlsqlmigrate}} ->ok

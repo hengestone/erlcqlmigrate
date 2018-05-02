@@ -56,7 +56,7 @@ up(ConnArgs, Migrations) ->
       fun(Mig) ->
           case applied(Conn, Mig) of
               true  -> ok;
-              false -> Fun = fun() -> update(Conn,Mig) end,
+              false -> Fun = fun() -> update(Conn, Mig) end,
                        transaction(Conn, Mig#migration.up, Fun)
           end
       end, Migrations),
@@ -86,7 +86,7 @@ down(ConnArgs, Migrations) ->
               false -> io:format("Skipping ~p it has not been applied~n.",
                                  [Mig#migration.title]),
                        ok;
-              true -> Fun = fun() -> delete(Conn,Mig) end,
+              true -> Fun = fun() -> delete(Conn, Mig) end,
                       transaction(Conn, Mig#migration.down, Fun)
           end
       end, Migrations),
@@ -108,11 +108,13 @@ disconnect(Conn) ->
 %%
 %% @doc Connect to the postgres database using epgsql
 connect([Option | _OptionsT] = Options) when is_tuple(Option) ->
+    application:ensure_started(pgsql),
     case pgsql_connection:open(Options) of
         {pgsql_connection, Pid} -> {pgsql_connection, Pid};
         {error, Error}          -> {error, Error}
     end;
 connect([Hostname, Port, Database, Username, Password]) ->
+    application:ensure_started(pgsql),
     case pgsql_connection:open(Hostname, Username, Password,
                        [{database, Database}, {port, Port}]) of
         {pgsql_connection, Pid} -> {pgsql_connection, Pid};
@@ -126,9 +128,24 @@ connect([Hostname, Port, Database, Username, Password]) ->
 %%
 %% @doc Execute a sql statement wrapped in a transaction
 %% also perform execute any other function before calling commit
-transaction(Conn, Sql, Fun) ->
+transaction_one(Conn, Sql, Fun) when is_binary(Sql)->
     squery(Conn, "BEGIN"),
     squery(Conn, Sql),
+    Fun(),
+    squery(Conn, "COMMIT"),
+    ok.
+
+transaction(Conn, [C | _R] = Sql, Fun) when is_integer(C)->
+  transaction_one(Conn, binary:lists_to_binary(Sql), Fun);
+
+transaction(Conn, SqlList, Fun) when is_list(SqlList) ->
+    squery(Conn, "BEGIN"),
+    lists:foreach(
+      fun(Sql) ->
+        squery(Conn, Sql)
+      end,
+      SqlList
+    ),
     Fun(),
     squery(Conn, "COMMIT"),
     ok.
@@ -139,6 +156,7 @@ transaction(Conn, Sql, Fun) ->
 %%
 %% @doc Execute a sql statement calling epgsql
 squery(Conn, Sql) ->
+    lager:info(Sql),
     case pgsql_connection:simple_query(Sql, Conn) of
         {error, Error} -> throw(Error);
         Result -> Result

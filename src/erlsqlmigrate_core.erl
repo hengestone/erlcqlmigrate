@@ -11,6 +11,7 @@
 
 -export([connect/2,
          create/3,
+         create_file/3,
          up/3,
          down/3,
          run_driver/3,
@@ -24,8 +25,7 @@
 %% ------------------------------------------------------------------
 %% Macro Definitions
 %% ------------------------------------------------------------------
--define(UPDIR(MigDir, Driver), filename:join([MigDir, Driver, "up"])).
--define(DOWNDIR(MigDir, Driver), filename:join([MigDir, Driver, "down"])).
+-define(YAMLDIR(MigDir, Driver), filename:join([MigDir, Driver])).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -41,13 +41,22 @@
 create(Config, _MigDir, []) ->
     run_driver(Config, create, []);
 
-create([{Driver, _ConnArgs}] = Config, MigDir, Name) ->
-    filelib:ensure_dir(?UPDIR(MigDir, Driver)++"/"),
-    filelib:ensure_dir(?DOWNDIR(MigDir, Driver)++"/"),
-    Migration = get_migration(Driver, MigDir, Name),
-    file:write_file(Migration#migration.up_path, <<"">>),
-    file:write_file(Migration#migration.down_path, <<"">>),
+create([{_Driver, _ConnArgs}] = Config, MigDir, Name) ->
+    create_file(Config, MigDir, Name),
     erlsqlmigrate_core:create(Config, MigDir, []).
+
+create_file([{Driver, _ConnArgs}], MigDir, Name) ->
+    filelib:ensure_dir(?YAMLDIR(MigDir, Driver)++"/"),
+    Migration = get_migration(Driver, MigDir, Name),
+    io:format("migration=~p~n", [Migration]),
+    file:write_file(Migration#migration.yaml_path,
+      "# YAML map with keys for up/down and a list of statements for each\n"
+      "up:\n"
+      "  - CREATE TABLE example(id INTEGER);\n"
+      "  - CREATE INDEX id_index ON example(id);"
+      "down:\n"
+      "  - DROP TABLE example;\n"
+    ).
 
 connect(pgsql, ConnArgs) ->
     erlsqlmigrate_driver_pg:connect(ConnArgs);
@@ -67,41 +76,47 @@ disconnect({erlcass_connection, _KeySpace} = Conn) ->
 disconnect(_Driver) ->
     throw(unknown_database).
 
-%% @spec up([{DB,ConnArgs}], MigDir, Name) -> ok
+%% @spec up([{DB, ConnArgs}], MigDir, Name) -> ok
 %%       DB = atom()
 %%       ConnArgs = term()
 %%       MigDir = filelib:dirname()
 %%       Name = string()
 %% @throws unknown_database
 %% @doc Run the up migration. Fetch migration files and pass to driver.
-up([{Driver, _ConnArgs}]=Config, MigDir, Name) ->
-    Regex = case Name of
-                [] -> "*";
-                Name -> "*"++Name++"*"
-            end,
-    %% I think its sorted but anyway
-    Files = lists:sort(filelib:wildcard(?UPDIR(MigDir, Driver)++"/"++Regex)),
-    Migrations = get_migrations(Driver, MigDir, Files),
-    run_driver(Config, up, Migrations).
+up([{_Driver, _ConnArgs}]=Config, MigDir, Name) ->
+  do(up, Config, MigDir, Name).
 
-%% @spec down([{DB,ConnArgs}], MigDir, Name) -> ok
+%% @spec down([{DB, ConnArgs}], MigDir, Name) -> ok
 %%       DB = atom()
 %%       ConnArgs = term()
 %%       MigDir = filelib:dirname()
 %%       Name = string()
 %% @throws unknown_database
 %% @doc Run the down migration. Fetch migration files and pass to driver.
-down([{Driver, _ConnArgs}]=Config, MigDir, Name) ->
+down([{_Driver, _ConnArgs}]=Config, MigDir, Name) ->
+  do(down, Config, MigDir, Name).
+
+do(UpDown, [{Driver, _ConnArgs}]=Config, MigDir, Name) ->
     Regex = case Name of
-                [] -> "*";
-                Name -> "*"++Name++"*"
+                [] -> "[0-9]*.yaml";
+                Name -> "[0-9]*"++Name++"*.yaml"
             end,
     %% I think its sorted but anyway
     Files = lists:sort(
               fun(A, B) -> A >= B end,
-              filelib:wildcard(?UPDIR(MigDir,Driver)++"/"++Regex)),
-    Migrations = get_migrations(Driver, MigDir, Files),
-    run_driver(Config, down, Migrations).
+              filelib:wildcard(?YAMLDIR(MigDir,Driver)++"/"++Regex)),
+    try get_migrations(Driver, MigDir, Files) of
+      Migrations ->
+        try run_driver(Config, UpDown, Migrations) of
+          Result -> Result
+        catch Error ->
+          lager:error("~s migrations failed:~n~p~n", [UpDown, Error]),
+          {error, Error}
+        end
+    catch Error    ->
+      lager:error("Error loading migrations:~n~p~n", [Error]),
+      {error, Error}
+    end.
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
@@ -141,8 +156,7 @@ get_migration(Driver, MigDir, {Name, Timestamp, Up, Down}) ->
     #migration{date=Timestamp,
                name=Name,
                title=Title,
-               up_path=?UPDIR(MigDir,Driver)++"/"++Title++".sql",
-               down_path=?DOWNDIR(MigDir,Driver)++"/"++Title++".sql",
+               yaml_path=?YAMLDIR(MigDir, Driver)++"/"++Title++".yaml",
                up = Up,
                down = Down
               };
@@ -160,32 +174,17 @@ get_migration(Driver, MigDir, Name) ->
 get_migrations(Driver, MigDir, Files) ->
     lists:map(
       fun(F) ->
-          case re:run(F,"\/([0-9_T:]+)\-(.*)\.sql\$",[{capture, all_but_first, list}]) of
+          case re:run(F,"\/([0-9_T:]+)\-(.*)\.yaml\$",[{capture, all_but_first, list}]) of
               {match, [Timestamp, Name]} ->
-                  Up = readlines(F),
-                  Fd = re:replace(F, "/up/", "/down/", [global, {return, list}]),
-                  Down = readlines(Fd),
-                  get_migration(Driver, MigDir,
-                                {Name, Timestamp, Up, Down});
-              nomatch -> throw(file_not_a_migration_file)
+                try yamerl:decode_file(F) of
+                  [[{"up", Up}, {"down", Down}]] ->
+                    get_migration(Driver, MigDir, {Name, Timestamp, Up, Down});
+                  OtherFormat                    ->
+                    erlang:error(file_not_a_migration_file, F, OtherFormat)
+                catch
+                  Error -> erlang:error(parse_error, F, Error)
+                end;
+              nomatch -> erlang:error(binary:list_to_bin(io_lib:format("Invalid file name format: ~s", [F])))
           end
       end,
       Files ).
-
-%% @spec readlines(FileName) -> string() | {error, errorinfo()}
-%%       FileName = file:filename()
-%%
-%% @doc Reads the entire file given by FileName into a string
-readlines(FileName) ->
-    {ok, Device} = file:open(FileName, [read]),
-    get_all_lines(Device, []).
-
-%% @spec get_all_lines(Device, Accum) -> string() | {error, errorinfo()}
-%%       Device = file:io_device()
-%%       Accum = string()
-%% @doc Gets lines recursively from the device and returns it as string()
-get_all_lines(Device, Accum) ->
-    case io:get_line(Device, "") of
-        eof  -> file:close(Device), lists:reverse(Accum);
-        Line -> get_all_lines(Device, [Line|Accum])
-    end.
