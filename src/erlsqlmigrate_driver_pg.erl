@@ -38,8 +38,6 @@ create(ConnArgs, _Args) ->
 %%       Config = erlsqlmigrate:config()
 %%       Migrations = [erlsqlmigrate_core:migration()]
 %%
-%% @throws setup_error
-%%
 %% @doc Execute the migrations in the given list of migrations.
 %% Each execution will be wrapped in a transaction and the
 %% migrations table will be updated to indicate it has been
@@ -51,8 +49,6 @@ up(ConnArgs, Migrations) ->
 %% @spec down(Config, Migrations) -> ok
 %%       Config = erlsqlmigrate:config()
 %%       Migrations = [erlsqlmigrate_core:migration()]
-%%
-%% @throws setup_error
 %%
 %% @doc Execute the down migrations in the given list of migrations.
 %% Each execution will be wrapped in a transaction and the migrations
@@ -69,18 +65,20 @@ do_migrations(UpDown, ConnArgs, Migrations) ->
         false ->
           setup(Conn)
     end,
-    Res = lists:foldl(
-      fun (Mig, Acc) ->
-        case Acc of
-          ok -> do(UpDown, Conn, Mig);
-          _  -> Acc
-        end
-      end,
-      ok,
-      Migrations
-    ),
+    Res = do_mult(UpDown, Conn, Migrations),
     ok = disconnect(Conn),
     Res.
+
+do_mult(_UpDown, _Conn, []) ->
+  ok;
+do_mult(UpDown, Conn, [Mig | Tail]) ->
+  case do(UpDown, Conn, Mig) of
+    ok ->
+      do_mult(UpDown, Conn, Tail);
+    Res ->
+      Res
+  end.
+
 
 do(up, Conn, Mig) ->
     case applied(Conn, Mig) of
