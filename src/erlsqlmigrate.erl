@@ -120,8 +120,8 @@ usage(OptSpecList) ->
 %% @doc Return the specification of the command line arguments.
 option_spec_list() ->
     {ok, Cwd } = file:get_cwd(),
-    MigrationsDefault = filename:join([Cwd,"migrations"]),
-    ConfigDefault = filename:join([Cwd,"config"]),
+    MigrationsDefault = filename:join([Cwd, "migrations"]),
+    ConfigDefault = filename:join([Cwd, "config"]),
 
     [
      {help,            $h, "help",          undefined,                    "Show the program options"},
@@ -139,10 +139,10 @@ option_spec_list() ->
 %% @doc Run the migration give the commands and arguments provided.
 run(Options, NonOptArgs) ->
     case proplists:get_value(version, Options) of
-        true -> version(), ok;
+        true  -> version(), ok;
         false -> case parse_command_args(NonOptArgs) of
-                     {Cmd,Name} ->
-                         ConfigDir = proplists:get_value(config_dir, Options),
+                     {Cmd, Name} ->
+                         ConfigDir   = proplists:get_value(config_dir, Options),
                          Environment = proplists:get_value(environment, Options),
                          MigDir = proplists:get_value(migration_dir, Options),
                          {ok, Config} = file:consult(filename:join([ConfigDir,Environment++".config"])),
@@ -157,15 +157,17 @@ run(Options, NonOptArgs) ->
 %%
 %% @doc Parse the list of commands into a form that can be used
 parse_command_args(["create", Name]) ->
-    {create,Name};
+    {create_file, Name};
+parse_command_args(["create_file", Name]) ->
+    {create_file, Name};
 parse_command_args(["create"]) ->
-    {create,[]};
+    {create, []};
 parse_command_args(["down", Name]) ->
-    {down,Name};
+    {down, Name};
 parse_command_args(["down"]) ->
-    {down,[]};
+    {down, []};
 parse_command_args(["up"]) ->
-    {up,[]};
+    {up, []};
 parse_command_args(Args) ->
-    io:format("~nUnknown Commands:~p~n~n",[Args]),
+    io:format("~nUnknown Commands:~p~n~n", [Args]),
     error.

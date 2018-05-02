@@ -29,8 +29,7 @@ create(ConnArgs, _Args) ->
     case is_setup(Conn) of
         true -> ok;
         false ->
-            {{create,table},[]} = squery(Conn, "CREATE TABLE migrations(title TEXT PRIMARY KEY,updated TIMESTAMP)"),
-            ok
+            setup(Conn)
     end,
     ok = disconnect(Conn),
     ok.
@@ -47,21 +46,7 @@ create(ConnArgs, _Args) ->
 %% executed. Note if the migration has already been applied
 %% it will be skipped
 up(ConnArgs, Migrations) ->
-    Conn = connect(ConnArgs),
-    case is_setup(Conn) of
-        true -> ok;
-        false -> throw(setup_error)
-    end,
-    lists:foreach(
-      fun(Mig) ->
-          case applied(Conn, Mig) of
-              true  -> ok;
-              false -> Fun = fun() -> update(Conn, Mig) end,
-                       transaction(Conn, Mig#migration.up, Fun)
-          end
-      end, Migrations),
-    ok = disconnect(Conn),
-    ok.
+  do_migrations(up, ConnArgs, Migrations).
 
 %% @spec down(Config, Migrations) -> ok
 %%       Config = erlsqlmigrate:config()
@@ -75,23 +60,46 @@ up(ConnArgs, Migrations) ->
 %% been executed. Note if the up migration has not been applied it
 %% will be skipped.
 down(ConnArgs, Migrations) ->
+  do_migrations(down, ConnArgs, Migrations).
+
+do_migrations(UpDown, ConnArgs, Migrations) ->
     Conn = connect(ConnArgs),
     case is_setup(Conn) of
         true -> ok;
-        false -> throw(setup_error)
+        false ->
+          setup(Conn)
     end,
-    lists:foreach(
-      fun(Mig) ->
-          case applied(Conn, Mig) of
-              false -> io:format("Skipping ~p it has not been applied~n.",
-                                 [Mig#migration.title]),
-                       ok;
-              true -> Fun = fun() -> delete(Conn, Mig) end,
-                      transaction(Conn, Mig#migration.down, Fun)
-          end
-      end, Migrations),
+    Res = lists:foldl(
+      fun (Mig, Acc) ->
+        case Acc of
+          ok -> do(UpDown, Conn, Mig);
+          _  -> Acc
+        end
+      end,
+      ok,
+      Migrations
+    ),
     ok = disconnect(Conn),
-    ok.
+    Res.
+
+do(up, Conn, Mig) ->
+    case applied(Conn, Mig) of
+        true  -> ok;
+        false ->
+            Fun = fun() -> update(Conn, Mig) end,
+            transaction(Conn, Mig#migration.up, Fun)
+    end;
+
+
+do(down, Conn, Mig) ->
+    case applied(Conn, Mig) of
+        false ->
+            lager:info("Skipping ~p it has not been applied~n.",
+                            [Mig#migration.title]),
+            ok;
+        true  -> Fun = fun() -> delete(Conn, Mig) end,
+            transaction(Conn, Mig#migration.down, Fun)
+    end.
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
@@ -136,9 +144,22 @@ transaction_one(Conn, Sql, Fun) when is_binary(Sql)->
     ok.
 
 transaction(Conn, [C | _R] = Sql, Fun) when is_integer(C)->
-  transaction_one(Conn, binary:lists_to_binary(Sql), Fun);
+  try transaction_one(Conn, binary:lists_to_binary(Sql), Fun) of
+    ok -> ok
+  catch Error ->
+    squery(Conn, "ROLLBACK"),
+    {error, Error}
+  end;
 
 transaction(Conn, SqlList, Fun) when is_list(SqlList) ->
+  try transaction_mult(Conn, SqlList, Fun) of
+    ok -> ok
+  catch Error ->
+    squery(Conn, "ROLLBACK"),
+    {error, Error}
+  end.
+
+transaction_mult(Conn, SqlList, Fun) ->
     squery(Conn, "BEGIN"),
     lists:foreach(
       fun(Sql) ->
@@ -181,7 +202,7 @@ equery(Conn, Sql, Params) ->
 %% @doc Insert into the migrations table the given migration.
 update(Conn, Migration) ->
     Title = iolist_to_binary(Migration#migration.title),
-    equery(Conn, "INSERT INTO migrations(title,updated) VALUES($1,now())",
+    equery(Conn, "INSERT INTO migrations(title, updated) VALUES($1,now())",
            [Title]).
 
 %% @spec delete(Conn, Migration) -> ok
@@ -205,6 +226,14 @@ applied(Conn, Migration) ->
     case equery(Conn, "SELECT * FROM migrations where title=$1",[Title]) of
         {{select, _Cols}, [_Row]} -> true;
         {{select, _Cols}, []} -> false
+    end.
+
+setup(Conn) ->
+    try squery(Conn, "CREATE TABLE migrations(title TEXT PRIMARY KEY, updated TIMESTAMP)") of
+      {{create, table}, []} -> ok
+    catch Error ->
+      lager:error("Error setting up migration table:~n~p~n", [Error]),
+      {error, Error}
     end.
 
 %% @spec is_setup(Conn) -> true | false

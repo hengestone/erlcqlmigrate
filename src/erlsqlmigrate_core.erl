@@ -42,8 +42,7 @@ create(Config, _MigDir, []) ->
     run_driver(Config, create, []);
 
 create([{_Driver, _ConnArgs}] = Config, MigDir, Name) ->
-    create_file(Config, MigDir, Name),
-    erlsqlmigrate_core:create(Config, MigDir, []).
+    create_file(Config, MigDir, Name).
 
 create_file([{Driver, _ConnArgs}], MigDir, Name) ->
     filelib:ensure_dir(?YAMLDIR(MigDir, Driver)++"/"),
@@ -107,11 +106,11 @@ do(UpDown, [{Driver, _ConnArgs}]=Config, MigDir, Name) ->
               filelib:wildcard(?YAMLDIR(MigDir,Driver)++"/"++Regex)),
     try get_migrations(Driver, MigDir, Files) of
       Migrations ->
-        try run_driver(Config, UpDown, Migrations) of
-          Result -> Result
-        catch Error ->
-          lager:error("~s migrations failed:~n~p~n", [UpDown, Error]),
-          {error, Error}
+        case run_driver(Config, UpDown, Migrations) of
+          ok -> ok;
+          {error, Error} ->
+            lager:error("~s migration failed:~n~p~n", [UpDown, Error]),
+            {error, Error}
         end
     catch Error    ->
       lager:error("Error loading migrations:~n~p~n", [Error]),
@@ -140,7 +139,7 @@ run_driver([{erlcass, ConnArgs}], Cmd, Args) ->
     erlsqlmigrate_driver_erlcass:Cmd(ConnArgs, Args);
 
 run_driver([{_Dbname,_ConnArgs}], _Cmd, _Args) ->
-    throw(unknown_database).
+    {error, unknown_database}.
 
 %% @spec get_migration(Driver, MigDir, {Name, Timestamp, Up, Down}) -> migration()
 %%       Driver = atom()
