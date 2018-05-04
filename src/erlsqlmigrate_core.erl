@@ -173,6 +173,7 @@ get_migration(Driver, MigDir, Name) ->
 %%
 %% @doc Creates a list of migration records from files
 get_migrations(Driver, MigDir, Files) ->
+    application:ensure_started(yamerl),
     lists:map(
       fun(F) ->
           case re:run(F,"\/([0-9_T:]+)\-(.*)\.yaml\$",[{capture, all_but_first, list}]) of
@@ -181,9 +182,9 @@ get_migrations(Driver, MigDir, Files) ->
                   [[{"up", Up}, {"down", Down}]] ->
                     get_migration(Driver, MigDir, {Name, Timestamp, Up, Down});
                   OtherFormat                    ->
-                    erlang:error(file_not_a_migration_file, F, OtherFormat)
+                    erlang:error(file_not_a_migration_file, [F, OtherFormat])
                 catch
-                  Error -> erlang:error(parse_error, F, Error)
+                  Error -> erlang:error(parse_error, [F, Error])
                 end;
               nomatch -> erlang:error(binary:list_to_bin(io_lib:format("Invalid file name format: ~s", [F])))
           end
