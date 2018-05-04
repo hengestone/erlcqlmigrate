@@ -50,9 +50,11 @@ create_file([{Driver, _ConnArgs}], MigDir, Name) ->
     io:format("migration=~p~n", [Migration]),
     file:write_file(Migration#migration.yaml_path,
       "# YAML map with keys for up/down and a list of statements for each\n"
+      "# Validate contents with e.g. http://www.yamllint.com/\n"
+      "---\n"
       "up:\n"
       "  - CREATE TABLE example(id INTEGER);\n"
-      "  - CREATE INDEX id_index ON example(id);"
+      "  - CREATE INDEX id_index ON example(id);\n"
       "down:\n"
       "  - DROP TABLE example;\n"
     ).
