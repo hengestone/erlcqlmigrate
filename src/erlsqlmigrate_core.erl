@@ -126,7 +126,7 @@ list(UpDown, [{Driver, _ConnArgs}]=Config, MigDir, Name) ->
   Files = sorted_files(UpDown, Config, MigDir, Name),
   try get_migrations(Driver, MigDir, Files) of
     [_] = Migrations ->
-      lager:info("Migrations=~p~n", [Migrations]),
+      lager:debug("Migrations=~p~n", [Migrations]),
       {ok, [{M#migration.title, run_driver(Config, applied, M)} || M <- Migrations]}
   catch Error    ->
     lager:error("Error loading migrations:~n~p~n", [Error]),
