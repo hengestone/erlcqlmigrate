@@ -14,6 +14,8 @@
          create_file/3,
          up/3,
          down/3,
+         list/2,
+         sorted_files/2,
          run_driver/3,
          disconnect/1
         ]).
@@ -47,7 +49,7 @@ create([{_Driver, _ConnArgs}] = Config, MigDir, Name) ->
 create_file([{Driver, _ConnArgs}], MigDir, Name) ->
     filelib:ensure_dir(?YAMLDIR(MigDir, Driver)++"/"),
     Migration = get_migration(Driver, MigDir, Name),
-    io:format("migration=~p~n", [Migration]),
+    lager:debug("migration=~p~n", [Migration]),
     file:write_file(Migration#migration.yaml_path,
       "# YAML map with keys for up/down and a list of statements for each\n"
       "# Validate contents with e.g. http://www.yamllint.com/\n"
@@ -92,20 +94,12 @@ up([{_Driver, _ConnArgs}]=Config, MigDir, Name) ->
 %%       ConnArgs = term()
 %%       MigDir = filelib:dirname()
 %%       Name = string()
-%% @throws unknown_database
 %% @doc Run the down migration. Fetch migration files and pass to driver.
 down([{_Driver, _ConnArgs}]=Config, MigDir, Name) ->
   do(down, Config, MigDir, Name).
 
 do(UpDown, [{Driver, _ConnArgs}]=Config, MigDir, Name) ->
-    Regex = case Name of
-                [] -> "[0-9]*.yaml";
-                Name -> "[0-9]*"++Name++"*.yaml"
-            end,
-    %% I think its sorted but anyway
-    Files = lists:sort(
-              fun(A, B) -> A >= B end,
-              filelib:wildcard(?YAMLDIR(MigDir,Driver)++"/"++Regex)),
+    Files = sorted_files(UpDown, Config, MigDir, Name),
     try get_migrations(Driver, MigDir, Files) of
       Migrations ->
         case run_driver(Config, UpDown, Migrations) of
@@ -119,9 +113,46 @@ do(UpDown, [{Driver, _ConnArgs}]=Config, MigDir, Name) ->
       {error, Error}
     end.
 
+%% @spec list([{DB, ConnArgs}], MigDir) -> {ok, [Names]}
+%%       DB = atom()
+%%       ConnArgs = term()
+%%       MigDir = filelib:dirname()
+%%       Name = string()
+%% @throws unknown_database
+%% @doc Run the down migration. Fetch migration files and pass to driver.
+list([{_Driver, _ConnArgs}]=Config, MigDir) ->
+  list(up, Config, MigDir, []).
+list(UpDown, [{Driver, _ConnArgs}]=Config, MigDir, Name) ->
+  Files = sorted_files(UpDown, Config, MigDir, Name),
+  try get_migrations(Driver, MigDir, Files) of
+    [_] = Migrations ->
+      lager:info("Migrations=~p~n", [Migrations]),
+      {ok, [{M#migration.title, run_driver(Config, applied, M)} || M <- Migrations]}
+  catch Error    ->
+    lager:error("Error loading migrations:~n~p~n", [Error]),
+    {error, Error}
+  end.
+
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+cmp(up, A, B) ->
+   A =< B;
+
+cmp(down, A, B) ->
+   A >= B.
+
+sorted_files([{_Driver, _ConnArgs}]=Config, MigDir) ->
+  sorted_files(up, Config, MigDir, []).
+sorted_files(UpDown, [{Driver, _ConnArgs}], MigDir, Name) ->
+    Regex = case Name of
+                [] -> "[0-9]*.yaml";
+                Name -> "[0-9]*"++Name++"*.yaml"
+            end,
+
+    lists:sort(
+        fun(A, B) -> cmp(UpDown, A, B) end,
+        filelib:wildcard(?YAMLDIR(MigDir, Driver)++"/"++Regex)).
 
 %% @spec run_driver([{DB,ConnArgs}],Cmd,Args) -> ok
 %%       DB = atom()

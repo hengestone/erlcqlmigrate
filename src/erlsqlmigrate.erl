@@ -162,6 +162,8 @@ parse_command_args(["create_file", Name]) ->
     {create_file, Name};
 parse_command_args(["create"]) ->
     {create, []};
+parse_command_args(["list"]) ->
+    {list, []};
 parse_command_args(["down", Name]) ->
     {down, Name};
 parse_command_args(["down"]) ->

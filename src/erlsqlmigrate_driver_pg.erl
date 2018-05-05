@@ -9,7 +9,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([connect/1, create/2, up/2, down/2]).
+-export([connect/1, create/2, up/2, down/2, applied/2]).
 
 -include("migration.hrl").
 
@@ -219,12 +219,20 @@ delete(Conn, Migration) ->
 %%
 %% @doc Check whether the given migration has been applied by
 %% querying the migrations table
-applied(Conn, Migration) ->
+applied({pgsql_connection, _Pid} = Conn, Migration) ->
     Title = iolist_to_binary(Migration#migration.title),
     case equery(Conn, "SELECT * FROM migrations where title=$1",[Title]) of
         {{select, _Cols}, [_Row]} -> true;
         {{select, _Cols}, []} -> false
-    end.
+    end;
+applied(ConnArgs, Migration) ->
+    Conn = connect(ConnArgs),
+    case is_setup(Conn) of
+        true -> ok;
+        false ->
+          setup(Conn)
+    end,
+    applied(Conn, Migration).
 
 setup(Conn) ->
     try squery(Conn, "CREATE TABLE migrations(title TEXT PRIMARY KEY, updated TIMESTAMP)") of
