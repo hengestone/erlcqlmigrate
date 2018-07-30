@@ -9,7 +9,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([create/2, up/2, down/2]).
+-export([create/2, up/2, down/2, connect/1, disconnect/1]).
 
 -import(emysql, [execute/2, as_json/1]).
 
@@ -27,14 +27,14 @@
                          | {error, string(), unicode:latin1_chardata() | unicode:chardata() | unicode:external_chardata()}
                          | {incomplete, string(), binary()}}).
 
--record(result_packet, {seq_num :: number(), 
-			field_list :: list(),
-			rows, extra}).
+-record(result_packet, {seq_num :: number(),
+      field_list :: list(),
+      rows, extra}).
 
--record(error_packet, {seq_num :: number(), 
-		       code :: number(), 
-		       status :: binary(), 
-		       msg :: [byte()]}).
+-record(error_packet, {seq_num :: number(),
+           code :: number(),
+           status :: binary(),
+           msg :: [byte()]}).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
