@@ -16,6 +16,7 @@
          down/3,
          list/2,
          sorted_files/2,
+         sorted_files/4,
          run_driver/3,
          disconnect/1
         ]).
@@ -125,7 +126,7 @@ list([{_Driver, _ConnArgs}]=Config, MigDir) ->
 list(UpDown, [{Driver, _ConnArgs}]=Config, MigDir, Name) ->
   Files = sorted_files(UpDown, Config, MigDir, Name),
   try get_migrations(Driver, MigDir, Files) of
-    [_] = Migrations ->
+    Migrations   ->
       lager:debug("Migrations=~p~n", [Migrations]),
       {ok, [{M#migration.title, run_driver(Config, applied, M)} || M <- Migrations]}
   catch Error    ->
@@ -146,8 +147,8 @@ sorted_files([{_Driver, _ConnArgs}]=Config, MigDir) ->
   sorted_files(up, Config, MigDir, []).
 sorted_files(UpDown, [{Driver, _ConnArgs}], MigDir, Name) ->
     Regex = case Name of
-                [] -> "[0-9]*.yaml";
-                Name -> "[0-9]*"++Name++"*.yaml"
+                [] -> "*.yaml";
+                Name -> "*"++Name++"*.yaml"
             end,
 
     lists:sort(
