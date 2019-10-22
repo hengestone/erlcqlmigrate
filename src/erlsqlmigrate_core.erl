@@ -50,7 +50,7 @@ create([{_Driver, _ConnArgs}] = Config, MigDir, Name) ->
 create_file([{Driver, _ConnArgs}], MigDir, Name) ->
     filelib:ensure_dir(?YAMLDIR(MigDir, Driver)++"/"),
     Migration = get_migration(Driver, MigDir, Name),
-    lager:debug("migration=~p~n", [Migration]),
+    logger:debug("migration=~p~n", [Migration]),
     file:write_file(Migration#migration.yaml_path,
       "# YAML map with keys for up/down and a list of statements for each\n"
       "# Validate contents with e.g. http://www.yamllint.com/\n"
@@ -106,11 +106,11 @@ do(UpDown, [{Driver, _ConnArgs}]=Config, MigDir, Name) ->
         case run_driver(Config, UpDown, Migrations) of
           ok -> ok;
           {error, Error} ->
-            lager:error("~s migration failed:~n~p~n", [UpDown, Error]),
+            logger:error("~s migration failed:~n~p~n", [UpDown, Error]),
             {error, Error}
         end
     catch Error    ->
-      lager:error("Error loading migrations:~n~p~n", [Error]),
+      logger:error("Error loading migrations:~n~p~n", [Error]),
       {error, Error}
     end.
 
@@ -127,10 +127,10 @@ list(UpDown, [{Driver, _ConnArgs}]=Config, MigDir, Name) ->
   Files = sorted_files(UpDown, Config, MigDir, Name),
   try get_migrations(Driver, MigDir, Files) of
     Migrations   ->
-      lager:debug("Migrations=~p~n", [Migrations]),
+      logger:debug("Migrations=~p~n", [Migrations]),
       {ok, [{M#migration.title, run_driver(Config, applied, M)} || M <- Migrations]}
   catch Error    ->
-    lager:error("Error loading migrations:~n~p~n", [Error]),
+    logger:error("Error loading migrations:~n~p~n", [Error]),
     {error, Error}
   end.
 

@@ -92,7 +92,7 @@ do(up, Conn, Mig) ->
 do(down, Conn, Mig) ->
     case applied(Conn, Mig) of
         false ->
-            lager:info("Skipping ~p it has not been applied~n.",
+            logger:info("Skipping ~p it has not been applied~n.",
                             [Mig#migration.title]),
             ok;
         true  -> Fun = fun() -> delete(Conn, Mig) end,
@@ -175,7 +175,7 @@ transaction_mult(Conn, SqlList, Fun) ->
 %%
 %% @doc Execute a sql statement calling epgsql
 squery(Conn, Sql) ->
-    lager:info(Sql),
+    logger:info(Sql),
     case pgsql_connection:simple_query(Sql, Conn) of
         {error, Error} -> throw(Error);
         Result -> Result
@@ -238,7 +238,7 @@ setup(Conn) ->
     try squery(Conn, "CREATE TABLE migrations(title TEXT PRIMARY KEY, updated TIMESTAMP)") of
       {{create, table}, []} -> ok
     catch Error ->
-      lager:error("Error setting up migration table:~n~p~n", [Error]),
+      logger:error("Error setting up migration table:~n~p~n", [Error]),
       {error, Error}
     end.
 
